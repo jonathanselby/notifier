@@ -4,9 +4,6 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
-
 jobs:
   go-test:
     runs-on: ubuntu-latest
@@ -15,10 +12,21 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
+      - name: Format contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "Go files requiring gofmt:"
+            echo "$files"
+            gofmt -d $files
+            exit 1
+          fi
       - name: Vet
         run: go vet ./...
       - name: Unit tests with race detector
-        run: go test -race ./...
+        run: go test -race -count=1 ./...
       - name: Build
         run: go build -o ./bin/notifier ./cmd/notifier
       - name: Version contract
@@ -30,7 +38,10 @@ jobs:
         run: |
           rm -f /tmp/bafflewick-alerts.log
           out=$(./bin/notifier -config examples/bafflewick/config.json -request examples/bafflewick/request.json)
-          echo "$out" | grep -q '"all_succeeded":true'
-          test -s /tmp/bafflewick-alerts.log
-      - name: Boundary acceptance
-        run: go test ./internal/notify -run 'TestLocalAndHTTPOutcomes|TestExternalSuccessRecorded|TestExerciseSuppressesExternal|TestTimeoutVisible' -count=1
+          echo "$out" | grep -q '"status":"delivered"'
+          grep -q 'Bafflewick break-glass activated' /tmp/bafflewick-alerts.log
+      - name: Delivery-boundary acceptance
+        run: >-
+          go test ./internal/notify
+          -run 'TestLocalAndHTTPOutcomes|TestExerciseSuppressesExternalBeforeIO|TestHTTPCannotMasqueradeAsLocal|TestTimeoutVisible|TestOneFailureDoesNotHideLaterOutcome|TestValidateConfigAndRequest'
+          -count=1

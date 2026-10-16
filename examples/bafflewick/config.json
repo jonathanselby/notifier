@@ -1,0 +1,1 @@
+{"channels":[{"name":"local-major-users","type":"file","target":"/tmp/bafflewick-alerts.log","external":false},{"name":"sms-gateway","type":"http","target":"http://127.0.0.1:9999/alerts","external":true}]}

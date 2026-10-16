@@ -1,0 +1,27 @@
+NOTIFIER V0.1
+
+TRUSTED DEPLOYMENT CONFIG         NOTIFICATION REQUEST
+ file = local                     composed message
+ http = external                  ordered unique channels
+                                  exercise + timeout
+          \                            /
+           +----------+---------------+
+                      v
+              validate contracts
+                      |
+                      v
+            channel-by-channel loop
+            /          |           \
+       unknown     exercise+HTTP    attempt
+        failed       suppressed     /    \
+                                file      HTTP POST
+                                  \        /
+                                   outcome
+                                      |
+                                      v
+                          delivered / failed / suppressed
+
+NO RETRY QUEUE
+NO RECIPIENT DIRECTORY
+NO MESSAGE COMPOSITION
+NO DELIVERY-RECEIPT CLAIM
