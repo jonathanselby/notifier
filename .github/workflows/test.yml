@@ -1,0 +1,36 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests with race detector
+        run: go test -race ./...
+      - name: Build
+        run: go build -o ./bin/notifier ./cmd/notifier
+      - name: Version contract
+        run: test "$(./bin/notifier -version)" = "notifier 0.1.0"
+      - name: Linux arm64 build
+        run: GOOS=linux GOARCH=arm64 go build -o ./bin/notifier-linux-arm64 ./cmd/notifier
+      - name: Bafflewick acceptance
+        shell: bash
+        run: |
+          rm -f /tmp/bafflewick-alerts.log
+          out=$(./bin/notifier -config examples/bafflewick/config.json -request examples/bafflewick/request.json)
+          echo "$out" | grep -q '"all_succeeded":true'
+          test -s /tmp/bafflewick-alerts.log
+      - name: Boundary acceptance
+        run: go test ./internal/notify -run 'TestLocalAndHTTPOutcomes|TestExternalSuccessRecorded|TestExerciseSuppressesExternal|TestTimeoutVisible' -count=1
