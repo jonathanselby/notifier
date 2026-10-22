@@ -43,6 +43,28 @@ func TestHTTPCannotMasqueradeAsLocal(t *testing.T) {
 	}
 }
 
+func TestHTTPRedirectIsNotFollowed(t *testing.T) {
+	redirected := false
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirected = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer destination.Close()
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, destination.URL, http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+
+	r := Service{}.Send(context.Background(), Config{Channels: []Channel{{Name: "x", Type: "http", Target: source.URL, External: true}}}, Request{Message: "sensitive", Channels: []string{"x"}, TimeoutMS: 1000})
+	if redirected {
+		t.Fatal("HTTP notification followed redirect")
+	}
+	if len(r.Outcomes) != 1 || r.Outcomes[0].Status != "failed" || !strings.Contains(r.Outcomes[0].Detail, "307") {
+		t.Fatalf("redirect was not reported as failed: %+v", r)
+	}
+}
+
 func TestTimeoutVisible(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(50 * time.Millisecond) }))
 	defer srv.Close()

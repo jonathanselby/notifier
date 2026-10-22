@@ -105,9 +105,13 @@ func (s Service) sendOne(ctx context.Context, ch Channel, msg string) error {
 			return err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		client := s.Client
-		if client == nil {
-			client = &http.Client{}
+		base := s.Client
+		if base == nil {
+			base = &http.Client{}
+		}
+		client := *base
+		client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
 		}
 		resp, err := client.Do(req)
 		if err != nil {
