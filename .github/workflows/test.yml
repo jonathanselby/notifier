@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: go build -o ./bin/notifier ./cmd/notifier
       - name: Version contract
-        run: test "$(./bin/notifier -version)" = "notifier 0.1.0"
+        run: test "$(./bin/notifier -version)" = "notifier $(tr -d '[:space:]' < VERSION)"
       - name: Linux arm64 build
         run: GOOS=linux GOARCH=arm64 go build -o ./bin/notifier-linux-arm64 ./cmd/notifier
       - name: Bafflewick acceptance
@@ -40,8 +40,21 @@ jobs:
           out=$(./bin/notifier -config examples/bafflewick/config.json -request examples/bafflewick/request.json)
           echo "$out" | grep -q '"status":"delivered"'
           grep -q 'Bafflewick break-glass activated' /tmp/bafflewick-alerts.log
+      - name: Bafflewick per-recipient exercise (offline)
+        shell: bash
+        run: |
+          set +e
+          out=$(./bin/notifier -config examples/bafflewick/per-recipient-config.json -request examples/bafflewick/per-recipient-exercise.json)
+          code=$?
+          set -e
+          echo "$out"
+          test "$code" = 1
+          echo "$out" | grep -q '"ref":"priya.n","status":"suppressed"'
+          echo "$out" | grep -q '"ref":"tom.b","status":"suppressed"'
+          echo "$out" | grep -q '"ref":"mallory","status":"failed","detail":"address refused"'
+          if echo "$out" | grep -qE 'priya@|mallory@|\+61400000789'; then echo "address leaked"; exit 1; fi
       - name: Delivery-boundary acceptance
         run: >-
-          go test ./internal/notify
-          -run 'TestLocalAndHTTPOutcomes|TestExerciseSuppressesExternalBeforeIO|TestHTTPCannotMasqueradeAsLocal|TestTimeoutVisible|TestOneFailureDoesNotHideLaterOutcome|TestValidateConfigAndRequest'
-          -count=1
+          go test ./notify ./cmd/notifier
+          -run 'TestLocalAndHTTPOutcomes|TestExerciseSuppressesExternalBeforeIO|TestHTTPCannotMasqueradeAsLocal|TestTimeoutVisible|TestOneFailureDoesNotHideLaterOutcome|TestValidateConfigAndRequest|TestPerRecipient|TestEmail|TestPatternRefusalBeforeIO|TestUnvalidatedPerRecipientChannelIsNeverOpen|TestExerciseSuppressesEveryExternalTypeBeforeIO|TestMixedFixedAndPerRecipient|TestV01RequestAndConfigCompatibility|TestTimeoutsBoundedPerDelivery|TestCLINeverPrintsAddresses'
+          -count=1 -v

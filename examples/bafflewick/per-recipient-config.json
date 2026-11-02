@@ -1,0 +1,6 @@
+{"channels":[
+ {"name":"local-major-users","type":"file","target":"/tmp/bafflewick-alerts.log"},
+ {"name":"mail","type":"email","target":"smtp.bafflewick.example:587","addressing":"per_recipient","address_pattern":"^[^@\\s]+@bafflewick\\.example$","from":"crab@bafflewick.example","subject":"Bafflewick CRAB needs you","auth_env":"BAFFLEWICK_SMTP_AUTH"},
+ {"name":"sms","type":"sms-http","target":"https://sms.bafflewick.example/send","addressing":"per_recipient","address_pattern":"^\\+61[0-9]{9}$","body_template":"{\"to\":\"{to}\",\"text\":\"{message}\"}","auth_env":"BAFFLEWICK_SMS_AUTH"},
+ {"name":"ir-leadership","type":"http","target":"https://chat.bafflewick.example/hooks/ir","body_shape":"text"}
+]}

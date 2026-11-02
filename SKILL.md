@@ -2,7 +2,7 @@
 
 ## Use this when
 
-Use this component when an application already has a message and an authorised set of channels and needs visible local/HTTP delivery attempts without owning vendor SDKs or a retry queue.
+Use this component when an application already has a message, has decided who should receive it, and needs visible delivery attempts (local file, webhook, email or SMS gateway) without owning vendor SDKs, an address store or a retry queue.
 
 ## Core rule
 
@@ -10,13 +10,17 @@ Use this component when an application already has a message and an authorised s
 
 ## Change discipline
 
-1. HTTP is always external; never make exercise suppression depend only on a caller flag.
-2. Keep message composition and recipient authorisation upstream.
-3. Return one outcome per requested channel in order.
-4. Never let one channel failure hide later outcomes.
-5. Refuse duplicate requested channels rather than risk accidental double-send.
-6. Keep timeouts bounded and explicit.
-7. Do not add retries unless the one-job boundary is deliberately changed.
-8. Keep 2xx semantics as adapter acceptance, not end-recipient receipt.
-9. Run format, vet, race, native, ARM64 and Bafflewick gates after changes.
-10. Regenerate code-derived evidence before release.
+1. External is derived from type; never make exercise suppression depend on a caller flag.
+2. Keep message composition, recipient choice and address storage upstream.
+3. Return one outcome per requested delivery, in order (channels first, then deliveries).
+4. Never let one delivery failure hide later outcomes.
+5. Refuse duplicate destinations rather than risk accidental double-send.
+6. Keep timeouts bounded and explicit, per delivery.
+7. Check every address against the channel's anchored pattern before any I/O.
+8. Never put an address in an outcome, refusal or log; report server refusals by code, not text.
+9. Email: STARTTLS or nothing; credentials only from the environment.
+10. Do not add retries unless the one-job boundary is deliberately changed.
+11. Keep 2xx semantics as adapter acceptance, not end-recipient receipt.
+12. Keep v0.1 configuration and requests working.
+13. Run format, vet, race, native, ARM64, Bafflewick and per-recipient gates after changes.
+14. Regenerate code-derived evidence before release.

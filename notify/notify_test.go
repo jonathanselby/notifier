@@ -14,7 +14,7 @@ func TestLocalAndHTTPOutcomes(t *testing.T) {
 	p := t.TempDir() + "/alerts"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
 	defer srv.Close()
-	c := Config{Channels: []Channel{{Name: "local", Type: "file", Target: p}, {Name: "external", Type: "http", Target: srv.URL, External: true}}}
+	c := Config{Channels: []Channel{{Name: "local", Type: "file", Target: p}, {Name: "external", Type: "http", Target: srv.URL, External: ptr(true)}}}
 	r := Service{}.Send(context.Background(), c, Request{Message: "break glass", Channels: []string{"local", "external"}, TimeoutMS: 1000})
 	if r.AllSucceeded || r.Outcomes[0].Status != "delivered" || r.Outcomes[1].Status != "failed" {
 		t.Fatalf("%+v", r)
@@ -29,7 +29,7 @@ func TestExerciseSuppressesExternalBeforeIO(t *testing.T) {
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
 	defer srv.Close()
-	c := Config{Channels: []Channel{{Name: "local", Type: "file", Target: t.TempDir() + "/alerts"}, {Name: "x", Type: "http", Target: srv.URL, External: true}}}
+	c := Config{Channels: []Channel{{Name: "local", Type: "file", Target: t.TempDir() + "/alerts"}, {Name: "x", Type: "http", Target: srv.URL, External: ptr(true)}}}
 	r := Service{}.Send(context.Background(), c, Request{Message: "exercise", Channels: []string{"local", "x"}, Exercise: true, TimeoutMS: 1000})
 	if called || len(r.Outcomes) != 2 || r.Outcomes[0].Status != "delivered" || r.Outcomes[1].Status != "suppressed" || !r.AllSucceeded {
 		t.Fatalf("%+v", r)
@@ -37,7 +37,7 @@ func TestExerciseSuppressesExternalBeforeIO(t *testing.T) {
 }
 
 func TestHTTPCannotMasqueradeAsLocal(t *testing.T) {
-	err := Validate(Config{Channels: []Channel{{Name: "x", Type: "http", Target: "https://example.invalid/hook", External: false}}})
+	err := Validate(Config{Channels: []Channel{{Name: "x", Type: "http", Target: "https://example.invalid/hook", External: ptr(false)}}})
 	if err == nil {
 		t.Fatal("HTTP channel accepted as non-external")
 	}
@@ -56,7 +56,7 @@ func TestHTTPRedirectIsNotFollowed(t *testing.T) {
 	}))
 	defer source.Close()
 
-	r := Service{}.Send(context.Background(), Config{Channels: []Channel{{Name: "x", Type: "http", Target: source.URL, External: true}}}, Request{Message: "sensitive", Channels: []string{"x"}, TimeoutMS: 1000})
+	r := Service{}.Send(context.Background(), Config{Channels: []Channel{{Name: "x", Type: "http", Target: source.URL, External: ptr(true)}}}, Request{Message: "sensitive", Channels: []string{"x"}, TimeoutMS: 1000})
 	if redirected {
 		t.Fatal("HTTP notification followed redirect")
 	}
@@ -68,7 +68,7 @@ func TestHTTPRedirectIsNotFollowed(t *testing.T) {
 func TestTimeoutVisible(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(50 * time.Millisecond) }))
 	defer srv.Close()
-	r := Service{}.Send(context.Background(), Config{Channels: []Channel{{Name: "x", Type: "http", Target: srv.URL, External: true}}}, Request{Message: "x", Channels: []string{"x"}, TimeoutMS: 5})
+	r := Service{}.Send(context.Background(), Config{Channels: []Channel{{Name: "x", Type: "http", Target: srv.URL, External: ptr(true)}}}, Request{Message: "x", Channels: []string{"x"}, TimeoutMS: 5})
 	if r.Outcomes[0].Status != "failed" || !strings.Contains(r.Outcomes[0].Detail, "deadline exceeded") {
 		t.Fatalf("%+v", r)
 	}
@@ -84,7 +84,7 @@ func TestOneFailureDoesNotHideLaterOutcome(t *testing.T) {
 }
 
 func TestValidateConfigAndRequest(t *testing.T) {
-	valid := Config{Channels: []Channel{{Name: "local", Type: "file", Target: "/tmp/x"}, {Name: "ext", Type: "http", Target: "https://example.invalid/hook", External: true}}}
+	valid := Config{Channels: []Channel{{Name: "local", Type: "file", Target: "/tmp/x"}, {Name: "ext", Type: "http", Target: "https://example.invalid/hook", External: ptr(true)}}}
 	if err := Validate(valid); err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +93,8 @@ func TestValidateConfigAndRequest(t *testing.T) {
 		{Channels: []Channel{{Name: "", Type: "file", Target: "/tmp/x"}}},
 		{Channels: []Channel{{Name: "x", Type: "file", Target: ""}}},
 		{Channels: []Channel{{Name: "x", Type: "smtp", Target: "x"}}},
-		{Channels: []Channel{{Name: "x", Type: "file", Target: "/tmp/x", External: true}}},
-		{Channels: []Channel{{Name: "x", Type: "http", Target: "https://example.invalid", External: false}}},
+		{Channels: []Channel{{Name: "x", Type: "file", Target: "/tmp/x", External: ptr(true)}}},
+		{Channels: []Channel{{Name: "x", Type: "http", Target: "https://example.invalid", External: ptr(false)}}},
 		{Channels: []Channel{{Name: "x", Type: "file", Target: "/tmp/a"}, {Name: "x", Type: "file", Target: "/tmp/b"}}},
 	}
 	for i, c := range badConfigs {
@@ -120,3 +120,5 @@ func TestValidateConfigAndRequest(t *testing.T) {
 		}
 	}
 }
+
+func ptr(b bool) *bool { return &b }

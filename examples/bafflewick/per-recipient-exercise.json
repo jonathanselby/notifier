@@ -1,0 +1,7 @@
+{"message":"Bafflewick exercise: 6 items on INC-007 are waiting for your decision. Sign in to CRAB.","exercise":true,"timeout_ms":1000,
+ "channels":["local-major-users","ir-leadership"],
+ "deliveries":[
+  {"channel":"mail","to":"priya@bafflewick.example","ref":"priya.n"},
+  {"channel":"sms","to":"+61400000789","ref":"tom.b"},
+  {"channel":"mail","to":"mallory@elsewhere.example","ref":"mallory"}
+ ]}

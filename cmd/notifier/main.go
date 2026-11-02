@@ -5,49 +5,67 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
-	"github.com/jonathanselby/notifier/internal/notify"
+	"github.com/jonathanselby/notifier/notify"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// run is the whole CLI. It never prints a delivery address: outcomes carry
+// refs, and refusals name channels and refs only.
+func run(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("notifier", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	var cfg, req string
 	var v bool
-	flag.StringVar(&cfg, "config", "", "channel config JSON")
-	flag.StringVar(&req, "request", "", "notification request JSON")
-	flag.BoolVar(&v, "version", false, "print version")
-	flag.Parse()
+	fs.StringVar(&cfg, "config", "", "channel config JSON")
+	fs.StringVar(&req, "request", "", "notification request JSON")
+	fs.BoolVar(&v, "version", false, "print version")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 	if v {
-		fmt.Println("notifier " + version)
-		return
+		fmt.Fprintln(stdout, "notifier "+version)
+		return 0
 	}
 	if cfg == "" || req == "" {
-		flag.Usage()
-		os.Exit(2)
+		fs.Usage()
+		return 2
 	}
 	var c notify.Config
 	var r notify.Request
 	if err := read(cfg, &c); err != nil {
-		fatal(err)
+		fmt.Fprintln(stderr, "config:", err)
+		return 3
 	}
 	if err := read(req, &r); err != nil {
-		fatal(err)
+		// Decoding errors can quote input; report the file only.
+		fmt.Fprintln(stderr, "request: cannot read or decode", req)
+		return 3
 	}
 	if err := notify.Validate(c); err != nil {
-		refuse(err)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 	if err := notify.ValidateRequest(r); err != nil {
-		refuse(err)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 	out := notify.Service{}.Send(context.Background(), c, r)
-	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
-		fatal(err)
+	if err := json.NewEncoder(stdout).Encode(out); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 3
 	}
 	if !out.AllSucceeded {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func read(path string, v any) error {
@@ -56,14 +74,4 @@ func read(path string, v any) error {
 		return err
 	}
 	return json.Unmarshal(b, v)
-}
-
-func refuse(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
-}
-
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(3)
 }
