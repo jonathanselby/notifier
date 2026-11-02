@@ -86,20 +86,20 @@ func TestPerRecipientEmailOverSTARTTLS(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	assertNoAddress(t, r, priya)
-	cmds := smtpd.commands()
+	cmds, overTLS, rcpts, data := smtpd.snapshot()
 	sawTLS := false
 	for i, cmd := range cmds {
 		if strings.HasPrefix(cmd, "STARTTLS") {
 			sawTLS = true
 		}
-		if v := strings.ToUpper(strings.SplitN(cmd, " ", 2)[0]); (v == "AUTH" || v == "MAIL" || v == "RCPT" || v == "DATA") && !smtpd.tls[i] {
+		if v := strings.ToUpper(strings.SplitN(cmd, " ", 2)[0]); (v == "AUTH" || v == "MAIL" || v == "RCPT" || v == "DATA") && !overTLS[i] {
 			t.Fatalf("%s sent before TLS: %v", v, cmds)
 		}
 	}
-	if !sawTLS || len(smtpd.rcpts) != 1 || smtpd.rcpts[0] != priya || len(smtpd.data) != 1 {
-		t.Fatalf("commands %v rcpts %v", cmds, smtpd.rcpts)
+	if !sawTLS || len(rcpts) != 1 || rcpts[0] != priya || len(data) != 1 {
+		t.Fatalf("commands %v rcpts %v", cmds, rcpts)
 	}
-	body := smtpd.data[0]
+	body := data[0]
 	for _, want := range []string{"From: crab@forensic.example", "To: " + priya, "Subject: CRAB needs you", "Content-Type: text/plain; charset=utf-8", "waiting for your decision"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("message missing %q:\n%s", want, body)
@@ -129,7 +129,7 @@ func TestEmailUntrustedCertificateFails(t *testing.T) {
 	if r.Outcomes[0].Status != StatusFailed || !strings.Contains(r.Outcomes[0].Detail, "starttls") {
 		t.Fatalf("%+v", r)
 	}
-	if len(smtpd.rcpts) != 0 {
+	if _, _, rcpts, _ := smtpd.snapshot(); len(rcpts) != 0 {
 		t.Fatal("recipient sent over untrusted TLS")
 	}
 }
@@ -174,12 +174,15 @@ func TestPerRecipientSMSHTTP(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	assertNoAddress(t, r, tom)
+	g.mu.Lock()
+	body, auth := g.bodies[0], g.auth[0]
+	g.mu.Unlock()
 	var got map[string]string
-	if err := json.Unmarshal([]byte(g.bodies[0]), &got); err != nil {
-		t.Fatalf("gateway body is not JSON: %q", g.bodies[0])
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("gateway body is not JSON: %q", body)
 	}
-	if got["to"] != tom || got["text"] != msg || g.auth[0] != "Bearer gw-token" {
-		t.Fatalf("body %v auth %q", got, g.auth[0])
+	if got["to"] != tom || got["text"] != msg || auth != "Bearer gw-token" {
+		t.Fatalf("body %v auth %q", got, auth)
 	}
 	// Gateway refusal is reported by status only.
 	g2 := newGateway(t, http.StatusBadGateway, 0)
@@ -350,6 +353,8 @@ func TestV01RequestAndConfigCompatibility(t *testing.T) {
 	if strings.Contains(string(out), `"ref"`) {
 		t.Fatalf("v0.1 outcome shape changed: %s", out)
 	}
+	hook.mu.Lock()
+	defer hook.mu.Unlock()
 	if hook.bodies[0] != `{"message":"Bafflewick break-glass activated"}` {
 		t.Fatalf("v0.1 webhook body changed: %s", hook.bodies[0])
 	}
@@ -444,5 +449,19 @@ func TestValidateDeliveriesRefuseDoubleSendWithoutNamingAddress(t *testing.T) {
 func TestScrubIsCaseInsensitive(t *testing.T) {
 	if got := scrub("rejected <PRIYA@Forensic.example> twice priya@forensic.example", priya); strings.Contains(strings.ToLower(got), "priya") {
 		t.Fatal(got)
+	}
+}
+
+func TestUnvalidatedSMSChannelNeverSendsInPlaintext(t *testing.T) {
+	ch := smsChannel("http://gw.example/send")
+	r := Service{}.Send(context.Background(), Config{Channels: []Channel{ch}}, Request{Message: "x", Deliveries: []Delivery{{Channel: "sms", To: tom, Ref: "t"}}, TimeoutMS: 1000})
+	if r.Outcomes[0].Status != StatusFailed || !strings.Contains(r.Outcomes[0].Detail, "nothing sent") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestV01ChannelNameWhitespaceStillAccepted(t *testing.T) {
+	if err := Validate(Config{Channels: []Channel{{Name: " local", Type: TypeFile, Target: "/tmp/x"}}}); err != nil {
+		t.Fatalf("v0.1 config refused: %v", err)
 	}
 }

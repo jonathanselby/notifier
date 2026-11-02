@@ -22,7 +22,7 @@ func Validate(c Config) error {
 	seen := map[string]bool{}
 	for _, ch := range c.Channels {
 		name := strings.TrimSpace(ch.Name)
-		if name == "" || name != ch.Name || strings.TrimSpace(ch.Target) == "" || seen[name] {
+		if name == "" || strings.TrimSpace(ch.Target) == "" || seen[name] {
 			return errors.New("invalid channel configuration")
 		}
 		seen[name] = true

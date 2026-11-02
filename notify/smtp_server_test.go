@@ -91,6 +91,13 @@ func (s *testSMTP) commands() []string {
 	return append([]string(nil), s.lines...)
 }
 
+// snapshot copies everything the server recorded, under its lock.
+func (s *testSMTP) snapshot() (lines []string, overTLS []bool, rcpts, data []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.lines...), append([]bool(nil), s.tls...), append([]string(nil), s.rcpts...), append([]string(nil), s.data...)
+}
+
 func (s *testSMTP) serve(conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))

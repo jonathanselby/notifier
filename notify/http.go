@@ -21,6 +21,9 @@ func (s Service) sendHTTP(ctx context.Context, ch Channel, msg string) error {
 }
 
 func (s Service) sendSMS(ctx context.Context, ch Channel, to, msg string) error {
+	if !httpsOrLoopback(ch.Target) {
+		return errors.New("sms-http target must be an https URL; nothing sent")
+	}
 	auth := ""
 	if ch.AuthEnv != "" {
 		if auth = s.getenv(ch.AuthEnv); auth == "" {
